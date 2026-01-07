@@ -59,6 +59,7 @@ body::after {
   z-index: 5;
   padding: 6px 0 10px;
   backdrop-filter: blur(12px);
+  margin-bottom: 6px;
 }
 
 .search-input {
@@ -113,7 +114,7 @@ body::after {
 
 .preview {
   position: relative;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 16 / 9;
   background: linear-gradient(135deg, rgba(38, 70, 83, 0.12), rgba(231, 111, 81, 0.2));
   overflow: hidden;
 }

@@ -3,9 +3,10 @@ const LAST_ACTIVE_KEY = "tabLastActive";
 const MAX_PREVIEWS = 80;
 const CAPTURE_DELAY_MS = 350;
 const CAPTURE_THROTTLE_MS = 10000;
-const PREVIEW_WIDTH = 2048;
-const PREVIEW_HEIGHT = 1536;
+const PREVIEW_WIDTH = 2560;
+const PREVIEW_HEIGHT = 1440;
 const PREVIEW_QUALITY = 0.9;
+const PREVIEW_BG = "#f5efe6";
 
 let capturingAll = false;
 const lastCaptureByTab = new Map();
@@ -221,7 +222,7 @@ async function resizeDataUrl(dataUrl, targetWidth, targetHeight) {
     if (!bitmap.width || !bitmap.height) return dataUrl;
     const width = Math.max(1, Math.round(targetWidth));
     const height = Math.max(1, Math.round(targetHeight));
-    const scale = Math.max(width / bitmap.width, height / bitmap.height);
+    const scale = Math.min(width / bitmap.width, height / bitmap.height);
     const drawWidth = Math.max(1, Math.round(bitmap.width * scale));
     const drawHeight = Math.max(1, Math.round(bitmap.height * scale));
     const dx = Math.round((width - drawWidth) / 2);
@@ -230,6 +231,8 @@ async function resizeDataUrl(dataUrl, targetWidth, targetHeight) {
     const context = canvas.getContext("2d");
     context.imageSmoothingEnabled = true;
     context.imageSmoothingQuality = "high";
+    context.fillStyle = PREVIEW_BG;
+    context.fillRect(0, 0, width, height);
     context.drawImage(bitmap, dx, dy, drawWidth, drawHeight);
     const output = await canvas.convertToBlob({
       type: "image/jpeg",

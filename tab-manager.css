@@ -99,13 +99,16 @@ body::after {
 }
 
 .tab-card.is-active {
-  outline: 2px solid rgba(42, 157, 143, 0.7);
-  outline-offset: 2px;
+  box-shadow: 0 0 0 2px rgba(42, 157, 143, 0.7), var(--shadow);
 }
 
 .tab-card:hover {
   transform: translateY(-3px);
   box-shadow: 0 14px 28px rgba(28, 20, 12, 0.18);
+}
+
+.tab-card.is-active:hover {
+  box-shadow: 0 0 0 2px rgba(42, 157, 143, 0.7), 0 14px 28px rgba(28, 20, 12, 0.18);
 }
 
 .preview {
@@ -138,6 +141,8 @@ body::after {
 .preview-overlay {
   position: absolute;
   inset: 6px 6px auto auto;
+  display: flex;
+  gap: 6px;
 }
 
 .close-btn {
@@ -145,11 +150,40 @@ body::after {
   height: 22px;
   border-radius: 50%;
   border: none;
-  background: rgba(31, 26, 21, 0.78);
+  background: rgba(231, 111, 81, 0.92);
   color: #fff;
   cursor: pointer;
-  font-size: 0.95rem;
   line-height: 1;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+.close-btn svg {
+  width: 12px;
+  height: 12px;
+  display: block;
+}
+
+.max-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(42, 157, 143, 0.9);
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+.max-btn svg {
+  width: 14px;
+  height: 14px;
+  display: block;
 }
 
 .meta {
@@ -213,6 +247,62 @@ body::after {
   text-align: center;
   color: var(--muted);
   background: rgba(255, 255, 255, 0.6);
+}
+
+.preview-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(18, 14, 10, 0.6);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  padding: 16px;
+}
+
+.preview-modal.active {
+  display: flex;
+}
+
+.preview-modal-card {
+  width: min(100%, 960px);
+  max-height: 100%;
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.preview-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.modal-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+}
+
+.modal-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.preview-modal-image {
+  width: 100%;
+  max-height: 78vh;
+  object-fit: contain;
+  border-radius: calc(var(--radius) - 6px);
+  background: #f5efe6;
+}
+
+.preview-modal-note {
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-align: center;
 }
 
 @keyframes cardIn {

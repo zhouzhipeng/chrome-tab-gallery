@@ -22,6 +22,26 @@
       <main id="tab-grid" class="grid"></main>
     </div>
 
+    <div id="preview-modal" class="preview-modal" aria-hidden="true">
+      <div class="preview-modal-card" role="dialog" aria-label="Preview">
+        <div class="preview-modal-actions">
+          <button id="preview-modal-close" class="modal-btn close-btn" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path
+                d="M6 6l12 12M18 6L6 18"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+              />
+            </svg>
+          </button>
+        </div>
+        <img id="preview-modal-image" class="preview-modal-image" alt="" />
+        <div id="preview-modal-note" class="preview-modal-note"></div>
+      </div>
+    </div>
+
     <script src="tab-manager.js"></script>
   </body>
 </html>

@@ -9,6 +9,10 @@ const BODY_SYNC_BATCH_LIMIT = 20;
 
 const grid = document.getElementById("tab-grid");
 const searchInput = document.getElementById("search");
+const previewModal = document.getElementById("preview-modal");
+const previewModalImage = document.getElementById("preview-modal-image");
+const previewModalNote = document.getElementById("preview-modal-note");
+const previewModalClose = document.getElementById("preview-modal-close");
 
 let windowsState = [];
 let previewsState = {};
@@ -27,6 +31,18 @@ function init() {
   searchInput.addEventListener("input", () => {
     render();
     scheduleBodyTextSync();
+  });
+
+  previewModalClose.addEventListener("click", () => closePreviewModal());
+  previewModal.addEventListener("click", (event) => {
+    if (event.target === previewModal) {
+      closePreviewModal();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && previewModal.classList.contains("active")) {
+      closePreviewModal();
+    }
   });
 
   chrome.runtime.onMessage.addListener((message) => {
@@ -156,9 +172,30 @@ function buildTabCard(tab, index) {
 
   const overlay = document.createElement("div");
   overlay.className = "preview-overlay";
+
+  const maxButton = document.createElement("button");
+  maxButton.className = "max-btn";
+  maxButton.type = "button";
+  maxButton.innerHTML =
+    '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+    '<path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5" ' +
+    'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />' +
+    "</svg>";
+  maxButton.title = "Maximize preview";
+  maxButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    openPreviewModal(tab);
+  });
+  overlay.appendChild(maxButton);
+
   const closeButton = document.createElement("button");
   closeButton.className = "close-btn";
-  closeButton.textContent = "x";
+  closeButton.type = "button";
+  closeButton.innerHTML =
+    '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+    '<path d="M6 6l12 12M18 6L6 18" ' +
+    'fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />' +
+    "</svg>";
   closeButton.title = "Close tab";
   closeButton.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -209,6 +246,32 @@ function focusTab(tab) {
       setTimeout(() => window.close(), 120);
     });
   });
+}
+
+function openPreviewModal(tab) {
+  const previewEntry = previewsState[tab.id];
+  if (previewEntry && previewEntry.image) {
+    previewModalImage.src = previewEntry.image;
+    previewModalImage.alt = tab.title || "Preview";
+    previewModalImage.style.display = "block";
+    previewModalNote.textContent = "";
+  } else {
+    previewModalImage.removeAttribute("src");
+    previewModalImage.style.display = "none";
+    previewModalNote.textContent = isCapturableUrl(tab.url)
+      ? "Preview not available yet."
+      : "Preview blocked for this page.";
+  }
+
+  previewModal.classList.add("active");
+  previewModal.setAttribute("aria-hidden", "false");
+}
+
+function closePreviewModal() {
+  previewModal.classList.remove("active");
+  previewModal.setAttribute("aria-hidden", "true");
+  previewModalImage.removeAttribute("src");
+  previewModalNote.textContent = "";
 }
 
 function getSearchMatch(tab, query) {

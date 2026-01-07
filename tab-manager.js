@@ -24,6 +24,10 @@ let autoCaptureTimer = null;
 let bodySyncTimer = null;
 let bodySyncInFlight = false;
 let lastBodySyncAt = 0;
+const cardCache = new Map();
+let emptyStateEl = null;
+let isReady = false;
+let lastOrder = [];
 
 init();
 
@@ -58,6 +62,7 @@ function init() {
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
+    if (!isReady) return;
     if (changes[PREVIEW_KEY]) {
       previewsState = changes[PREVIEW_KEY].newValue || {};
       render();
@@ -99,6 +104,9 @@ async function refresh() {
   lastActiveState = lastActive;
   await reconcileLastActive(windowsState, lastActiveState);
   render();
+  if (!isReady) {
+    isReady = true;
+  }
   await maybeRequestActiveCapture();
   scheduleBodyTextSync();
 }
@@ -109,7 +117,6 @@ function scheduleRefresh() {
 }
 
 function render() {
-  grid.innerHTML = "";
   const query = searchInput.value.trim().toLowerCase();
   let cardIndex = 0;
   const rawTabs = windowsState.flatMap((win) => win.tabs || []);
@@ -131,44 +138,68 @@ function render() {
     tabs = rawTabs.sort((a, b) => compareTabsByLastActive(a, b));
   }
 
+  const nextOrder = tabs.map((tab) => String(tab.id));
+  const orderChanged =
+    nextOrder.length !== lastOrder.length ||
+    nextOrder.some((id, index) => id !== lastOrder[index]);
+
+  const seen = new Set();
+  const fragment = orderChanged ? document.createDocumentFragment() : null;
+
   tabs.forEach((tab) => {
+    const key = String(tab.id);
+    let card = cardCache.get(key);
     cardIndex += 1;
-    const card = buildTabCard(tab, cardIndex);
-    grid.appendChild(card);
+    if (!card) {
+      card = buildTabCard(tab, cardIndex);
+      if (isReady) {
+        card.classList.add("animate");
+      }
+      cardCache.set(key, card);
+    } else {
+      updateTabCard(card, tab, cardIndex);
+    }
+    if (fragment) {
+      fragment.appendChild(card);
+    } else if (!card.isConnected) {
+      grid.appendChild(card);
+    }
+    seen.add(key);
   });
 
-  if (tabs.length === 0) {
-    const empty = document.createElement("div");
-    empty.className = "empty";
-    empty.textContent = query ? "No tabs match your search." : "No tabs found.";
-    grid.appendChild(empty);
+  if (fragment) {
+    grid.appendChild(fragment);
   }
+
+  for (const [key, card] of cardCache.entries()) {
+    if (!seen.has(key)) {
+      card.remove();
+      cardCache.delete(key);
+    }
+  }
+
+  lastOrder = nextOrder;
+  updateEmptyState(tabs.length, query);
 }
 
 function buildTabCard(tab, index) {
   const card = document.createElement("article");
   card.className = "tab-card";
-  if (tab.active) card.classList.add("is-active");
   card.style.animationDelay = `${Math.min(index * 20, 160)}ms`;
-  card.addEventListener("click", () => focusTab(tab));
 
   const preview = document.createElement("div");
   preview.className = "preview";
 
-  const previewEntry = previewsState[tab.id];
-  const isPreviewFresh = previewEntry && previewEntry.url === (tab.url || "");
-  if (isPreviewFresh && previewEntry.image) {
-    const img = document.createElement("img");
-    img.src = previewEntry.image;
-    img.alt = "";
-    img.loading = "lazy";
-    preview.appendChild(img);
-  } else {
-    const placeholder = document.createElement("div");
-    placeholder.className = "preview-placeholder";
-    placeholder.textContent = isCapturableUrl(tab.url) ? "No preview" : "Blocked";
-    preview.appendChild(placeholder);
-  }
+  const previewImage = document.createElement("img");
+  previewImage.className = "preview-image";
+  previewImage.alt = "";
+  previewImage.loading = "lazy";
+  previewImage.style.display = "none";
+  preview.appendChild(previewImage);
+
+  const placeholder = document.createElement("div");
+  placeholder.className = "preview-placeholder";
+  preview.appendChild(placeholder);
 
   const overlay = document.createElement("div");
   overlay.className = "preview-overlay";
@@ -182,10 +213,6 @@ function buildTabCard(tab, index) {
     'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />' +
     "</svg>";
   maxButton.title = "Maximize preview";
-  maxButton.addEventListener("click", (event) => {
-    event.stopPropagation();
-    openPreviewModal(tab);
-  });
   overlay.appendChild(maxButton);
 
   const closeButton = document.createElement("button");
@@ -197,10 +224,6 @@ function buildTabCard(tab, index) {
     'fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />' +
     "</svg>";
   closeButton.title = "Close tab";
-  closeButton.addEventListener("click", (event) => {
-    event.stopPropagation();
-    chrome.tabs.remove(tab.id);
-  });
   overlay.appendChild(closeButton);
   preview.appendChild(overlay);
 
@@ -209,18 +232,14 @@ function buildTabCard(tab, index) {
 
   const titleRow = document.createElement("div");
   titleRow.className = "title-row";
-  if (tab.favIconUrl) {
-    const icon = document.createElement("img");
-    icon.className = "favicon";
-    icon.src = tab.favIconUrl;
-    icon.alt = "";
-    titleRow.appendChild(icon);
-  } else {
-    const fallback = document.createElement("div");
-    fallback.className = "favicon-fallback";
-    fallback.textContent = getFallbackLetter(tab);
-    titleRow.appendChild(fallback);
-  }
+  const icon = document.createElement("img");
+  icon.className = "favicon";
+  icon.alt = "";
+  titleRow.appendChild(icon);
+
+  const fallback = document.createElement("div");
+  fallback.className = "favicon-fallback";
+  titleRow.appendChild(fallback);
 
   const title = document.createElement("h3");
   title.className = "title";
@@ -237,7 +256,104 @@ function buildTabCard(tab, index) {
   card.appendChild(preview);
   card.appendChild(meta);
 
+  card.tabGallery = {
+    preview,
+    previewImage,
+    placeholder,
+    icon,
+    fallback,
+    title,
+    url,
+    tabId: tab.id,
+    tab,
+  };
+
+  card.addEventListener("click", () => focusTab(card.tabGallery.tab));
+  maxButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    openPreviewModal(card.tabGallery.tab);
+  });
+  closeButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    chrome.tabs.remove(card.tabGallery.tab.id);
+  });
+
+  updateTabCard(card, tab, index);
   return card;
+}
+
+function updateTabCard(card, tab, index) {
+  if (!card.tabGallery) return;
+  card.tabGallery.tabId = tab.id;
+  card.tabGallery.tab = tab;
+  if (tab.active) {
+    card.classList.add("is-active");
+  } else {
+    card.classList.remove("is-active");
+  }
+  card.style.animationDelay = `${Math.min(index * 20, 160)}ms`;
+
+  updatePreview(card.tabGallery, tab);
+  updateFavicon(card.tabGallery, tab);
+
+  if (card.tabGallery.title.textContent !== (tab.title || "Untitled tab")) {
+    card.tabGallery.title.textContent = tab.title || "Untitled tab";
+  }
+  const urlHtml = formatUrlWithHighlights(tab.url || "");
+  if (card.tabGallery.url.innerHTML !== urlHtml) {
+    card.tabGallery.url.innerHTML = urlHtml;
+  }
+}
+
+function updatePreview(refs, tab) {
+  const previewEntry = previewsState[tab.id];
+  const isPreviewFresh = previewEntry && previewEntry.url === (tab.url || "");
+  if (isPreviewFresh && previewEntry.image) {
+    if (refs.previewImage.src !== previewEntry.image) {
+      refs.previewImage.src = previewEntry.image;
+    }
+    refs.previewImage.style.display = "block";
+    refs.placeholder.style.display = "none";
+  } else {
+    refs.previewImage.style.display = "none";
+    refs.placeholder.style.display = "grid";
+    const text = isCapturableUrl(tab.url) ? "No preview" : "Blocked";
+    if (refs.placeholder.textContent !== text) {
+      refs.placeholder.textContent = text;
+    }
+  }
+}
+
+function updateFavicon(refs, tab) {
+  if (tab.favIconUrl) {
+    if (refs.icon.src !== tab.favIconUrl) {
+      refs.icon.src = tab.favIconUrl;
+    }
+    refs.icon.style.display = "block";
+    refs.fallback.style.display = "none";
+  } else {
+    refs.icon.style.display = "none";
+    refs.fallback.style.display = "grid";
+    const letter = getFallbackLetter(tab);
+    if (refs.fallback.textContent !== letter) {
+      refs.fallback.textContent = letter;
+    }
+  }
+}
+
+function updateEmptyState(count, query) {
+  if (!emptyStateEl) {
+    emptyStateEl = document.createElement("div");
+    emptyStateEl.className = "empty";
+  }
+  if (count === 0) {
+    emptyStateEl.textContent = query ? "No tabs match your search." : "No tabs found.";
+    if (!grid.contains(emptyStateEl)) {
+      grid.appendChild(emptyStateEl);
+    }
+  } else if (grid.contains(emptyStateEl)) {
+    emptyStateEl.remove();
+  }
 }
 
 function focusTab(tab) {

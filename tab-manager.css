@@ -96,6 +96,9 @@ body::after {
   grid-template-rows: auto 1fr;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.tab-card.animate {
   animation: cardIn 0.35s ease both;
 }
 

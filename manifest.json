@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Tab Gallery Manager",
+  "description": "A visual tab manager that shows previews of all your tabs in one page.",
+  "version": "1.0.0",
+  "permissions": ["tabs", "storage"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "action": {
+    "default_title": "Tab Gallery",
+    "default_popup": "tab-manager.html"
+  }
+}

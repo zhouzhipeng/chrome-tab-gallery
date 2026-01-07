@@ -638,10 +638,12 @@ function compareTabsByLastActive(a, b) {
 }
 
 function getLastActiveValue(tab) {
-  const stored = lastActiveState[String(tab.id)];
-  if (typeof stored === "number") return stored;
-  if (typeof tab.lastAccessed === "number") return Math.floor(tab.lastAccessed);
-  return 0;
+  const stored = typeof lastActiveState[String(tab.id)] === "number"
+    ? lastActiveState[String(tab.id)]
+    : 0;
+  const lastAccessed =
+    typeof tab.lastAccessed === "number" ? Math.floor(tab.lastAccessed) : 0;
+  return Math.max(stored, lastAccessed);
 }
 
 async function reconcileLastActive(windows, lastActive) {

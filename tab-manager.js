@@ -192,7 +192,7 @@ function buildTabCard(tab, index) {
 
   const url = document.createElement("p");
   url.className = "url";
-  url.textContent = getHost(tab.url);
+  url.textContent = tab.url || "";
 
   meta.appendChild(titleRow);
   meta.appendChild(url);

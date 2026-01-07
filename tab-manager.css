@@ -199,6 +199,13 @@ body::after {
   word-break: break-all;
 }
 
+.url-value {
+  background: rgba(231, 111, 81, 0.18);
+  color: var(--accent);
+  padding: 0 2px;
+  border-radius: 4px;
+}
+
 .empty {
   padding: 20px;
   border-radius: var(--radius);

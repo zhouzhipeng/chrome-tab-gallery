@@ -192,7 +192,7 @@ function buildTabCard(tab, index) {
 
   const url = document.createElement("p");
   url.className = "url";
-  url.textContent = tab.url || "";
+  url.innerHTML = formatUrlWithHighlights(tab.url || "");
 
   meta.appendChild(titleRow);
   meta.appendChild(url);
@@ -226,6 +226,75 @@ function getBodyTextForTab(tab) {
   const preview = previewsState[tab.id];
   if (!preview || !preview.bodyText) return "";
   return preview.bodyText.toLowerCase();
+}
+
+function formatUrlWithHighlights(rawUrl) {
+  if (!rawUrl) return "";
+  const parts = splitUrl(rawUrl);
+  const base = safeDecode(parts.base);
+  const queryHtml = parts.query ? buildQueryHtml(parts.query) : "";
+  const hashText = parts.hash ? `#${escapeHtml(safeDecode(parts.hash))}` : "";
+  const baseHtml = escapeHtml(base);
+  if (!queryHtml && !hashText) return baseHtml;
+  return `${baseHtml}${queryHtml ? "?" + queryHtml : ""}${hashText}`;
+}
+
+function splitUrl(rawUrl) {
+  const hashIndex = rawUrl.indexOf("#");
+  const beforeHash = hashIndex >= 0 ? rawUrl.slice(0, hashIndex) : rawUrl;
+  const hash = hashIndex >= 0 ? rawUrl.slice(hashIndex + 1) : "";
+  const queryIndex = beforeHash.indexOf("?");
+  const base = queryIndex >= 0 ? beforeHash.slice(0, queryIndex) : beforeHash;
+  const query = queryIndex >= 0 ? beforeHash.slice(queryIndex + 1) : "";
+  return { base, query, hash };
+}
+
+function buildQueryHtml(query) {
+  if (!query) return "";
+  const parts = query.split("&");
+  const rendered = parts.map((part) => {
+    if (!part) return "";
+    const eqIndex = part.indexOf("=");
+    if (eqIndex === -1) {
+      return escapeHtml(safeDecode(part));
+    }
+    const key = part.slice(0, eqIndex);
+    const value = part.slice(eqIndex + 1);
+    const decodedKey = safeDecode(key);
+    const decodedValue = safeDecode(value);
+    const valueHtml = decodedValue
+      ? `<span class="url-value">${escapeHtml(decodedValue)}</span>`
+      : "";
+    return `${escapeHtml(decodedKey)}=${valueHtml}`;
+  });
+  return rendered.join("&");
+}
+
+function safeDecode(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch (_error) {
+    return value;
+  }
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (char) => {
+    switch (char) {
+      case "&":
+        return "&amp;";
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case "\"":
+        return "&quot;";
+      case "'":
+        return "&#39;";
+      default:
+        return char;
+    }
+  });
 }
 
 function getHost(url) {

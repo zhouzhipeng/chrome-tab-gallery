@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Tab Gallery Manager",
+  "name": "Tab Gallery",
   "description": "A visual tab manager that shows previews of all your tabs in one page.",
   "version": "1.0.0",
   "permissions": ["tabs", "storage"],
@@ -15,8 +15,20 @@
       "run_at": "document_idle"
     }
   ],
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
   "action": {
     "default_title": "Tab Gallery",
-    "default_popup": "tab-manager.html"
+    "default_popup": "tab-manager.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
   }
 }

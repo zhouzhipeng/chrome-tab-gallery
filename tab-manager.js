@@ -1,11 +1,13 @@
 const PREVIEW_KEY = "tabPreviews";
 const LAST_ACTIVE_KEY = "tabLastActive";
+const SEARCH_KEY = "tabGallerySearch";
 const AUTO_CAPTURE_COOLDOWN_MS = 30000;
 const AUTO_CAPTURE_INTERVAL_MS = 60000;
 const STALE_PREVIEW_AGE_MS = 3 * 60 * 1000;
 const BODY_SYNC_DEBOUNCE_MS = 250;
 const BODY_SYNC_COOLDOWN_MS = 1000;
 const BODY_SYNC_BATCH_LIMIT = 20;
+const SEARCH_SAVE_DEBOUNCE_MS = 200;
 
 const grid = document.getElementById("tab-grid");
 const searchInput = document.getElementById("search");
@@ -28,6 +30,8 @@ const cardCache = new Map();
 let emptyStateEl = null;
 let isReady = false;
 let lastOrder = [];
+let searchSaveTimer = null;
+let lastSavedSearch = "";
 
 init();
 
@@ -35,6 +39,7 @@ function init() {
   searchInput.addEventListener("input", () => {
     render();
     scheduleBodyTextSync();
+    scheduleSearchSave();
   });
 
   previewModalClose.addEventListener("click", () => closePreviewModal());
@@ -48,6 +53,7 @@ function init() {
       closePreviewModal();
     }
   });
+  window.addEventListener("beforeunload", () => saveSearchValue());
 
   chrome.runtime.onMessage.addListener((message) => {
     if (!message || !message.type) return;
@@ -73,9 +79,11 @@ function init() {
     }
   });
 
-  registerLiveUpdates();
-  refresh();
-  startAutoCapture();
+  loadSavedSearch().then(() => {
+    registerLiveUpdates();
+    refresh();
+    startAutoCapture();
+  });
 }
 
 function registerLiveUpdates() {
@@ -121,10 +129,11 @@ function render() {
   let cardIndex = 0;
   const rawTabs = windowsState.flatMap((win) => win.tabs || []);
   let tabs = rawTabs;
+  const parsedQuery = query && isAdvancedQuery(query) ? parseQuery(tokenizeQuery(query)) : null;
   if (query) {
     const scored = rawTabs
       .map((tab) => {
-        const match = getSearchMatch(tab, query);
+        const match = getSearchMatch(tab, query, parsedQuery);
         if (!match) return null;
         return { tab, rank: match.rank };
       })
@@ -390,21 +399,163 @@ function closePreviewModal() {
   previewModalNote.textContent = "";
 }
 
-function getSearchMatch(tab, query) {
+function getSearchMatch(tab, query, parsedQuery) {
   if (!query) return { rank: 0 };
-  const url = (tab.url || "").toLowerCase();
-  if (url.includes(query)) return { rank: 0 };
-  const title = (tab.title || "").toLowerCase();
-  if (title.includes(query)) return { rank: 1 };
-  const bodyText = getBodyTextForTab(tab);
-  if (bodyText && bodyText.includes(query)) return { rank: 2 };
-  return null;
+  if (parsedQuery) {
+    const result = evaluateQuery(parsedQuery, tab);
+    if (!result.match) return null;
+    return { rank: result.rank };
+  }
+  if (!isAdvancedQuery(query)) return getSimpleMatch(tab, query);
+  const ast = parseQuery(tokenizeQuery(query));
+  if (!ast) return getSimpleMatch(tab, query);
+  const result = evaluateQuery(ast, tab);
+  if (!result.match) return null;
+  return { rank: result.rank };
 }
 
 function getBodyTextForTab(tab) {
   const preview = previewsState[tab.id];
   if (!preview || !preview.bodyText) return "";
   return preview.bodyText.toLowerCase();
+}
+
+function isAdvancedQuery(query) {
+  return /[()]/.test(query) || /\b(and|or)\b/.test(query);
+}
+
+function getSimpleMatch(tab, query) {
+  const rank = getTermRank(query, tab);
+  if (rank === Infinity) return null;
+  return { rank };
+}
+
+function getTermRank(term, tab) {
+  if (!term) return Infinity;
+  const urlRaw = (tab.url || "").toLowerCase();
+  const urlDecoded = safeDecode(tab.url || "").toLowerCase();
+  if (urlRaw.includes(term) || urlDecoded.includes(term)) return 0;
+  const title = (tab.title || "").toLowerCase();
+  if (title.includes(term)) return 1;
+  const bodyText = getBodyTextForTab(tab);
+  if (bodyText && bodyText.includes(term)) return 2;
+  return Infinity;
+}
+
+function tokenizeQuery(query) {
+  const tokens = [];
+  let i = 0;
+  while (i < query.length) {
+    const char = query[i];
+    if (/\s/.test(char)) {
+      i += 1;
+      continue;
+    }
+    if (char === "(" || char === ")") {
+      tokens.push({ type: char });
+      i += 1;
+      continue;
+    }
+    let start = i;
+    while (i < query.length && !/\s/.test(query[i]) && query[i] !== "(" && query[i] !== ")") {
+      i += 1;
+    }
+    const value = query.slice(start, i);
+    if (value === "and" || value === "or") {
+      tokens.push({ type: value });
+    } else {
+      tokens.push({ type: "term", value });
+    }
+  }
+  return tokens;
+}
+
+function parseQuery(tokens) {
+  let index = 0;
+
+  const peek = () => tokens[index];
+  const match = (type) => {
+    const token = tokens[index];
+    if (!token || token.type !== type) return null;
+    index += 1;
+    return token;
+  };
+
+  const parseExpression = () => parseOr();
+
+  const parseOr = () => {
+    let node = parseAnd();
+    if (!node) return null;
+    while (match("or")) {
+      const right = parseAnd();
+      if (!right) return null;
+      node = { type: "or", left: node, right };
+    }
+    return node;
+  };
+
+  const parseAnd = () => {
+    let node = parsePrimary();
+    if (!node) return null;
+    while (true) {
+      if (match("and")) {
+        const right = parsePrimary();
+        if (!right) return null;
+        node = { type: "and", left: node, right };
+        continue;
+      }
+      const next = peek();
+      if (next && (next.type === "term" || next.type === "(")) {
+        const right = parsePrimary();
+        if (!right) return null;
+        node = { type: "and", left: node, right };
+        continue;
+      }
+      break;
+    }
+    return node;
+  };
+
+  const parsePrimary = () => {
+    if (match("(")) {
+      const node = parseExpression();
+      if (!node || !match(")")) return null;
+      return node;
+    }
+    const termToken = match("term");
+    if (termToken) {
+      return { type: "term", value: termToken.value };
+    }
+    return null;
+  };
+
+  const ast = parseExpression();
+  if (!ast) return null;
+  if (index < tokens.length) return null;
+  return ast;
+}
+
+function evaluateQuery(node, tab) {
+  if (!node) return { match: false, rank: Infinity };
+  if (node.type === "term") {
+    const rank = getTermRank(node.value, tab);
+    return { match: rank !== Infinity, rank };
+  }
+  if (node.type === "and") {
+    const left = evaluateQuery(node.left, tab);
+    if (!left.match) return { match: false, rank: Infinity };
+    const right = evaluateQuery(node.right, tab);
+    if (!right.match) return { match: false, rank: Infinity };
+    return { match: true, rank: Math.min(left.rank, right.rank) };
+  }
+  if (node.type === "or") {
+    const left = evaluateQuery(node.left, tab);
+    const right = evaluateQuery(node.right, tab);
+    if (!left.match && !right.match) return { match: false, rank: Infinity };
+    if (left.match && right.match) return { match: true, rank: Math.min(left.rank, right.rank) };
+    return left.match ? left : right;
+  }
+  return { match: false, rank: Infinity };
 }
 
 function formatUrlWithHighlights(rawUrl) {
@@ -550,6 +701,31 @@ function startAutoCapture() {
   window.addEventListener("focus", () => {
     maybeRequestActiveCapture();
   });
+}
+
+function loadSavedSearch() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(SEARCH_KEY, (result) => {
+      const saved = result[SEARCH_KEY];
+      if (typeof saved === "string") {
+        searchInput.value = saved;
+        lastSavedSearch = saved;
+      }
+      resolve();
+    });
+  });
+}
+
+function scheduleSearchSave() {
+  if (searchSaveTimer) clearTimeout(searchSaveTimer);
+  searchSaveTimer = setTimeout(saveSearchValue, SEARCH_SAVE_DEBOUNCE_MS);
+}
+
+function saveSearchValue() {
+  const value = searchInput.value || "";
+  if (value === lastSavedSearch) return;
+  lastSavedSearch = value;
+  chrome.storage.local.set({ [SEARCH_KEY]: value });
 }
 
 function scheduleBodyTextSync() {

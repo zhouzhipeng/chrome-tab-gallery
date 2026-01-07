@@ -40,7 +40,6 @@ chrome.tabs.onActivated.addListener(async (info) => {
   if (!tab || !tab.active) return;
   await updateLastActive(tab.id);
   if (!isCapturable(tab)) return;
-  if (!shouldCapture(tab.id)) return;
   await captureAndStore(tab, info.windowId);
 });
 

@@ -110,7 +110,7 @@ body::after {
 
 .preview {
   position: relative;
-  aspect-ratio: 3 / 2;
+  aspect-ratio: 4 / 3;
   background: linear-gradient(135deg, rgba(38, 70, 83, 0.12), rgba(231, 111, 81, 0.2));
   overflow: hidden;
 }

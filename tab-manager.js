@@ -3,6 +3,9 @@ const LAST_ACTIVE_KEY = "tabLastActive";
 const AUTO_CAPTURE_COOLDOWN_MS = 30000;
 const AUTO_CAPTURE_INTERVAL_MS = 60000;
 const STALE_PREVIEW_AGE_MS = 3 * 60 * 1000;
+const BODY_SYNC_DEBOUNCE_MS = 250;
+const BODY_SYNC_COOLDOWN_MS = 1000;
+const BODY_SYNC_BATCH_LIMIT = 20;
 
 const grid = document.getElementById("tab-grid");
 const searchInput = document.getElementById("search");
@@ -14,11 +17,17 @@ let refreshTimer = null;
 let captureInFlight = false;
 let lastCaptureRequestAt = 0;
 let autoCaptureTimer = null;
+let bodySyncTimer = null;
+let bodySyncInFlight = false;
+let lastBodySyncAt = 0;
 
 init();
 
 function init() {
-  searchInput.addEventListener("input", () => render());
+  searchInput.addEventListener("input", () => {
+    render();
+    scheduleBodyTextSync();
+  });
 
   chrome.runtime.onMessage.addListener((message) => {
     if (!message || !message.type) return;
@@ -75,6 +84,7 @@ async function refresh() {
   await reconcileLastActive(windowsState, lastActiveState);
   render();
   await maybeRequestActiveCapture();
+  scheduleBodyTextSync();
 }
 
 function scheduleRefresh() {
@@ -86,10 +96,24 @@ function render() {
   grid.innerHTML = "";
   const query = searchInput.value.trim().toLowerCase();
   let cardIndex = 0;
-  const tabs = windowsState
-    .flatMap((win) => win.tabs || [])
-    .filter((tab) => matchesQuery(tab, query))
-    .sort((a, b) => compareTabsByLastActive(a, b));
+  const rawTabs = windowsState.flatMap((win) => win.tabs || []);
+  let tabs = rawTabs;
+  if (query) {
+    const scored = rawTabs
+      .map((tab) => {
+        const match = getSearchMatch(tab, query);
+        if (!match) return null;
+        return { tab, rank: match.rank };
+      })
+      .filter(Boolean)
+      .sort((a, b) => {
+        if (a.rank !== b.rank) return a.rank - b.rank;
+        return compareTabsByLastActive(a.tab, b.tab);
+      });
+    tabs = scored.map((entry) => entry.tab);
+  } else {
+    tabs = rawTabs.sort((a, b) => compareTabsByLastActive(a, b));
+  }
 
   tabs.forEach((tab) => {
     cardIndex += 1;
@@ -187,11 +211,21 @@ function focusTab(tab) {
   });
 }
 
-function matchesQuery(tab, query) {
-  if (!query) return true;
-  const title = (tab.title || "").toLowerCase();
+function getSearchMatch(tab, query) {
+  if (!query) return { rank: 0 };
   const url = (tab.url || "").toLowerCase();
-  return title.includes(query) || url.includes(query);
+  if (url.includes(query)) return { rank: 0 };
+  const title = (tab.title || "").toLowerCase();
+  if (title.includes(query)) return { rank: 1 };
+  const bodyText = getBodyTextForTab(tab);
+  if (bodyText && bodyText.includes(query)) return { rank: 2 };
+  return null;
+}
+
+function getBodyTextForTab(tab) {
+  const preview = previewsState[tab.id];
+  if (!preview || !preview.bodyText) return "";
+  return preview.bodyText.toLowerCase();
 }
 
 function getHost(url) {
@@ -270,6 +304,84 @@ function startAutoCapture() {
   });
 }
 
+function scheduleBodyTextSync() {
+  if (!searchInput.value.trim()) return;
+  if (bodySyncTimer) clearTimeout(bodySyncTimer);
+  bodySyncTimer = setTimeout(syncBodyText, BODY_SYNC_DEBOUNCE_MS);
+}
+
+async function syncBodyText() {
+  if (bodySyncInFlight) return;
+  if (!searchInput.value.trim()) return;
+  const now = Date.now();
+  if (now - lastBodySyncAt < BODY_SYNC_COOLDOWN_MS) return;
+  lastBodySyncAt = now;
+  bodySyncInFlight = true;
+
+  const tabs = windowsState
+    .flatMap((win) => win.tabs || [])
+    .filter((tab) => tab && tab.id !== undefined && isBodyReadableUrl(tab.url));
+  const missing = tabs.filter((tab) => !hasBodyText(tab));
+  if (missing.length === 0) {
+    bodySyncInFlight = false;
+    return;
+  }
+
+  const previews = await getPreviews();
+  let updated = false;
+  let processed = 0;
+  for (const tab of missing) {
+    if (processed >= BODY_SYNC_BATCH_LIMIT) break;
+    const bodyText = await fetchBodyText(tab.id);
+    if (!bodyText) continue;
+    const key = String(tab.id);
+    const existing = previews[key] || {};
+    if (existing.bodyText === bodyText) continue;
+    previews[key] = {
+      ...existing,
+      url: tab.url || existing.url || "",
+      title: tab.title || existing.title || "",
+      bodyText,
+    };
+    updated = true;
+    processed += 1;
+  }
+
+  if (updated) {
+    await setPreviews(previews);
+  }
+
+  bodySyncInFlight = false;
+  if (missing.length > processed) {
+    scheduleBodyTextSync();
+  }
+}
+
+function hasBodyText(tab) {
+  const preview = previewsState[tab.id];
+  return Boolean(preview && typeof preview.bodyText === "string" && preview.bodyText.length > 0);
+}
+
+function isBodyReadableUrl(url) {
+  return isCapturableUrl(url);
+}
+
+function fetchBodyText(tabId) {
+  return new Promise((resolve) => {
+    chrome.tabs.sendMessage(tabId, { type: "getBodyText" }, (response) => {
+      if (chrome.runtime.lastError) {
+        resolve("");
+        return;
+      }
+      if (!response || !response.ok) {
+        resolve("");
+        return;
+      }
+      resolve(response.text || "");
+    });
+  });
+}
+
 function compareTabsByLastActive(a, b) {
   const scoreA = getLastActiveValue(a);
   const scoreB = getLastActiveValue(b);
@@ -335,6 +447,12 @@ function getPreviews() {
     chrome.storage.local.get(PREVIEW_KEY, (result) => {
       resolve(result[PREVIEW_KEY] || {});
     });
+  });
+}
+
+function setPreviews(previews) {
+  return new Promise((resolve) => {
+    chrome.storage.local.set({ [PREVIEW_KEY]: previews }, () => resolve());
   });
 }
 

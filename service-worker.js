@@ -3,6 +3,9 @@ const LAST_ACTIVE_KEY = "tabLastActive";
 const MAX_PREVIEWS = 80;
 const CAPTURE_DELAY_MS = 350;
 const CAPTURE_THROTTLE_MS = 10000;
+const PREVIEW_WIDTH = 2048;
+const PREVIEW_HEIGHT = 1536;
+const PREVIEW_QUALITY = 0.9;
 
 let capturingAll = false;
 const lastCaptureByTab = new Map();
@@ -146,7 +149,10 @@ async function captureAndStore(tab, windowId) {
   const capture = await captureVisible(windowId);
   if (!capture.ok) return capture;
 
-  const resized = await resizeDataUrl(capture.dataUrl, 900);
+  const [resized, bodyText] = await Promise.all([
+    resizeDataUrl(capture.dataUrl, PREVIEW_WIDTH, PREVIEW_HEIGHT),
+    getBodyText(tab.id),
+  ]);
   const previews = await getPreviews();
   previews[tab.id] = {
     image: resized,
@@ -154,6 +160,7 @@ async function captureAndStore(tab, windowId) {
     title: tab.title || "",
     capturedAt: Date.now(),
     windowId: tab.windowId,
+    bodyText,
   };
   prunePreviews(previews, MAX_PREVIEWS);
   await setPreviews(previews);
@@ -203,7 +210,7 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function resizeDataUrl(dataUrl, maxWidth) {
+async function resizeDataUrl(dataUrl, targetWidth, targetHeight) {
   if (typeof createImageBitmap !== "function" || typeof OffscreenCanvas !== "function") {
     return dataUrl;
   }
@@ -212,14 +219,22 @@ async function resizeDataUrl(dataUrl, maxWidth) {
     const blob = await response.blob();
     const bitmap = await createImageBitmap(blob);
     if (!bitmap.width || !bitmap.height) return dataUrl;
-    const scale = Math.min(1, maxWidth / bitmap.width);
-    if (scale === 1) return dataUrl;
-    const width = Math.max(1, Math.round(bitmap.width * scale));
-    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const width = Math.max(1, Math.round(targetWidth));
+    const height = Math.max(1, Math.round(targetHeight));
+    const scale = Math.max(width / bitmap.width, height / bitmap.height);
+    const drawWidth = Math.max(1, Math.round(bitmap.width * scale));
+    const drawHeight = Math.max(1, Math.round(bitmap.height * scale));
+    const dx = Math.round((width - drawWidth) / 2);
+    const dy = Math.round((height - drawHeight) / 2);
     const canvas = new OffscreenCanvas(width, height);
     const context = canvas.getContext("2d");
-    context.drawImage(bitmap, 0, 0, width, height);
-    const output = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.88 });
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    context.drawImage(bitmap, dx, dy, drawWidth, drawHeight);
+    const output = await canvas.convertToBlob({
+      type: "image/jpeg",
+      quality: PREVIEW_QUALITY,
+    });
     return await blobToDataUrl(output);
   } catch (_error) {
     return dataUrl;
@@ -251,6 +266,26 @@ function getPreviews() {
 function setPreviews(previews) {
   return new Promise((resolve) => {
     chrome.storage.local.set({ [PREVIEW_KEY]: previews }, () => resolve());
+  });
+}
+
+function getBodyText(tabId) {
+  return new Promise((resolve) => {
+    if (tabId === undefined || tabId === null) {
+      resolve("");
+      return;
+    }
+    chrome.tabs.sendMessage(tabId, { type: "getBodyText" }, (response) => {
+      if (chrome.runtime.lastError) {
+        resolve("");
+        return;
+      }
+      if (!response || !response.ok) {
+        resolve("");
+        return;
+      }
+      resolve(response.text || "");
+    });
   });
 }
 

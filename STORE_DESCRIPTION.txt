@@ -2,10 +2,14 @@ Tab Gallery - Store Description
 
 Short description (max 132 chars):
 Visual tab manager popup with live previews, fast search (URL/title/body), and quick tab switching.
+Default shortcut : Ctrl+B or Cmd+B
 
 Detailed description:
 Tab Gallery is a visual tab manager that opens in a compact Chrome popup (like Google Translate).
 See all open tabs as crisp previews, jump to any tab instantly, and close tabs in one click.
+
+Default shortcut :
+Ctrl+B or Cmd+B
 
 Highlights:
 - Popup UI: open from the toolbar icon, no extra windows or tabs.

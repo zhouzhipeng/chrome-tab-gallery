@@ -32,6 +32,7 @@ let isReady = false;
 let lastOrder = [];
 let searchSaveTimer = null;
 let lastSavedSearch = "";
+let modalReturnFocusEl = null;
 
 init();
 
@@ -374,6 +375,7 @@ function focusTab(tab) {
 }
 
 function openPreviewModal(tab) {
+  modalReturnFocusEl = document.activeElement;
   const previewEntry = previewsState[tab.id];
   if (previewEntry && previewEntry.image) {
     previewModalImage.src = previewEntry.image;
@@ -388,15 +390,25 @@ function openPreviewModal(tab) {
       : "Preview blocked for this page.";
   }
 
+  previewModal.hidden = false;
   previewModal.classList.add("active");
-  previewModal.setAttribute("aria-hidden", "false");
+  requestAnimationFrame(() => {
+    previewModalClose.focus({ preventScroll: true });
+  });
 }
 
 function closePreviewModal() {
   previewModal.classList.remove("active");
-  previewModal.setAttribute("aria-hidden", "true");
+  previewModal.hidden = true;
   previewModalImage.removeAttribute("src");
   previewModalNote.textContent = "";
+  const returnTarget = modalReturnFocusEl;
+  modalReturnFocusEl = null;
+  if (returnTarget && document.contains(returnTarget)) {
+    returnTarget.focus({ preventScroll: true });
+  } else {
+    searchInput.focus({ preventScroll: true });
+  }
 }
 
 function getSearchMatch(tab, query, parsedQuery) {

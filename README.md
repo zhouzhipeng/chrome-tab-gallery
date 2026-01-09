@@ -1,6 +1,9 @@
 # Tab Gallery
 A visual tab manager that shows all of your open tabs as live previews inside a compact Chrome popup (like the Google Translate extension panel). It keeps previews fresh, lets you jump to any tab instantly, and supports fast search across URL, title, and page body text.
 
+## Default active shortcut
+```Ctrl+B or Cmd+B```
+
 ## Previews
 
 ### popup panel

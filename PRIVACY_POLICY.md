@@ -1,6 +1,6 @@
 # Privacy Policy for Tab Gallery
 
-Last updated: 2024-01-01
+Last updated: 2025-01-01
 
 ## Summary
 Tab Gallery is a local-only tab manager. All data stays on your device and is never sent to any server.

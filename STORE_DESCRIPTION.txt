@@ -15,7 +15,7 @@ Highlights:
 - Popup UI: open from the toolbar icon, no extra windows or tabs.
 - High-resolution previews: 2048x1536 thumbnails cached per tab.
 - Smart order: most recently active tabs appear first.
-- Fast search: URL > title > page body text.
+- Fast search: URL > title > page body text. Also support boolean query using 'and' / 'or' keyword.
 - Full URL display: decoded URLs with highlighted query values.
 - Quick actions: click a card to switch, use the x button to close.
 

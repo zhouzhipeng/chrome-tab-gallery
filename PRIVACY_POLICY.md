@@ -32,4 +32,4 @@ You can clear all stored data by:
 - Clearing extension data in Chrome settings.
 
 ## Contact
-If you have questions, contact: [YOUR_EMAIL_ADDRESS]
+If you have questions, contact: ronnieinus@gmail.com

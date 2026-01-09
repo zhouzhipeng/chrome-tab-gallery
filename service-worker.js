@@ -7,6 +7,7 @@ const PREVIEW_WIDTH = 2560;
 const PREVIEW_HEIGHT = 1440;
 const PREVIEW_QUALITY = 0.9;
 const PREVIEW_BG = "#f5efe6";
+const PREVIEW_LIMITS = [MAX_PREVIEWS, 40, 25, 15, 8, 4, 2, 1];
 
 let capturingAll = false;
 const lastCaptureByTab = new Map();
@@ -46,6 +47,14 @@ chrome.tabs.onActivated.addListener(async (info) => {
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.url) {
     await removePreview(tabId);
+    if (!capturingAll && tab.active && isCapturable(tab)) {
+      setTimeout(async () => {
+        if (capturingAll) return;
+        const latest = await getTab(tabId);
+        if (!latest || !latest.active || !isCapturable(latest)) return;
+        await captureAndStore(latest, latest.windowId);
+      }, 450);
+    }
   }
   if (changeInfo.status === "complete" && tab.active && !capturingAll) {
     if (!isCapturable(tab)) return;
@@ -162,8 +171,10 @@ async function captureAndStore(tab, windowId) {
     windowId: tab.windowId,
     bodyText,
   };
-  prunePreviews(previews, MAX_PREVIEWS);
-  await setPreviews(previews);
+  const saved = await savePreviews(previews);
+  if (!saved) {
+    return { ok: false, error: "Storage quota exceeded" };
+  }
   return { ok: true };
 }
 
@@ -204,6 +215,16 @@ function prunePreviews(previews, max) {
   for (const id of Object.keys(previews)) {
     if (!keep.has(id)) delete previews[id];
   }
+}
+
+async function savePreviews(previews) {
+  for (const limit of PREVIEW_LIMITS) {
+    const copy = { ...previews };
+    prunePreviews(copy, limit);
+    const ok = await setPreviews(copy);
+    if (ok) return true;
+  }
+  return false;
 }
 
 function delay(ms) {
@@ -267,7 +288,9 @@ function getPreviews() {
 
 function setPreviews(previews) {
   return new Promise((resolve) => {
-    chrome.storage.local.set({ [PREVIEW_KEY]: previews }, () => resolve());
+    chrome.storage.local.set({ [PREVIEW_KEY]: previews }, () => {
+      resolve(!chrome.runtime.lastError);
+    });
   });
 }
 

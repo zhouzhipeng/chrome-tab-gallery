@@ -1,6 +1,28 @@
 # Tab Gallery
-
 A visual tab manager that shows all of your open tabs as live previews inside a compact Chrome popup (like the Google Translate extension panel). It keeps previews fresh, lets you jump to any tab instantly, and supports fast search across URL, title, and page body text.
+
+## Previews
+
+### popup panel
+![img.png](previews/img.png)
+### normal search
+> match all tabs in title / url / page text
+
+![img_1.png](previews/img_1.png)
+
+### boolean search
+> and
+
+![img_3.png](previews/img_3.png)
+
+> or
+
+![img_2.png](previews/img_2.png)
+
+> combo
+
+![img_4.png](previews/img_4.png)
+
 
 ## Features
 
@@ -46,6 +68,7 @@ A visual tab manager that shows all of your open tabs as live previews inside a 
 
 - `tabs` — read tab metadata and capture previews.
 - `storage` — store cached previews and search text.
+- `unlimitedStorage` — allow high‑resolution preview caching without quota issues.
 - `<all_urls>` — access pages for capture and body text.
 
 ## Development

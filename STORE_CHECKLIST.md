@@ -18,6 +18,7 @@
 ## Privacy
 - Provide a Privacy Policy URL (host `PRIVACY_POLICY.md` somewhere public).
 - Declare data usage: local-only, no data sold or transferred.
+- Note the `unlimitedStorage` permission is used only for local preview caching.
 
 ## Submission
 - Upload zip in the Developer Dashboard.

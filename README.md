@@ -30,11 +30,12 @@ A visual tab manager that shows all of your open tabs as live previews inside a 
 ## Features
 
 - Popup UI: opens from the toolbar icon; no new windows or tabs.
-- Visual previews: 2K (2048×1536) thumbnails cached per tab.
+- Visual previews: 2K (2560×1440) thumbnails cached per tab.
 - Smart ordering: most recently activated tabs appear first.
 - Fast search: prioritizes URL, then title, then page body text.
 - Full URL display: decoded URLs with query values highlighted.
 - Quick actions: click a card to focus the tab; use the x button to close it.
+- Batch actions: when search filters tabs, move or close the matched set.
 
 ## How It Works
 
@@ -50,6 +51,7 @@ A visual tab manager that shows all of your open tabs as live previews inside a 
 3. Pin the extension (optional) and click the **Tab Gallery** icon.
 4. Use the search box to filter by URL, title, or body content.
 5. Click a card to jump to that tab (the popup closes automatically).
+6. When the search narrows results, use the operations buttons to move or close the matched tabs.
 
 ## Notes & Limitations
 

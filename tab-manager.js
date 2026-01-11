@@ -376,7 +376,8 @@ function updateEmptyState(count, query) {
 
 function updateOperations(query, totalCount, filteredCount) {
   const hasQuery = Boolean(searchInput.value.trim());
-  const shouldShow = hasQuery && Boolean(query) && filteredCount > 0 && filteredCount < totalCount;
+  const shouldShow =
+    hasQuery && Boolean(query) && filteredCount > 1 && filteredCount < totalCount;
   if (!shouldShow) {
     moveTabsButton.textContent = "";
     closeTabsButton.textContent = "";

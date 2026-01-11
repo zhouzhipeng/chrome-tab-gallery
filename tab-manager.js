@@ -11,6 +11,9 @@ const SEARCH_SAVE_DEBOUNCE_MS = 200;
 
 const grid = document.getElementById("tab-grid");
 const searchInput = document.getElementById("search");
+const operations = document.getElementById("operations");
+const moveTabsButton = document.getElementById("move-tabs");
+const closeTabsButton = document.getElementById("close-tabs");
 const previewModal = document.getElementById("preview-modal");
 const previewModalImage = document.getElementById("preview-modal-image");
 const previewModalNote = document.getElementById("preview-modal-note");
@@ -33,6 +36,7 @@ let lastOrder = [];
 let searchSaveTimer = null;
 let lastSavedSearch = "";
 let modalReturnFocusEl = null;
+let filteredTabsState = [];
 
 init();
 
@@ -42,6 +46,8 @@ function init() {
     scheduleBodyTextSync();
     scheduleSearchSave();
   });
+  moveTabsButton.addEventListener("click", () => moveFilteredTabs());
+  closeTabsButton.addEventListener("click", () => closeFilteredTabs());
 
   previewModalClose.addEventListener("click", () => closePreviewModal());
   previewModal.addEventListener("click", (event) => {
@@ -189,6 +195,8 @@ function render() {
   }
 
   lastOrder = nextOrder;
+  filteredTabsState = tabs;
+  updateOperations(query, rawTabs.length, tabs.length);
   updateEmptyState(tabs.length, query);
 }
 
@@ -364,6 +372,53 @@ function updateEmptyState(count, query) {
   } else if (grid.contains(emptyStateEl)) {
     emptyStateEl.remove();
   }
+}
+
+function updateOperations(query, totalCount, filteredCount) {
+  const hasQuery = Boolean(searchInput.value.trim());
+  const shouldShow = hasQuery && Boolean(query) && filteredCount > 0 && filteredCount < totalCount;
+  if (!shouldShow) {
+    moveTabsButton.textContent = "";
+    closeTabsButton.textContent = "";
+    operations.hidden = true;
+    operations.style.display = "none";
+    return;
+  }
+  const labelCount = filteredCount;
+  const suffix = labelCount === 1 ? "" : "s";
+  moveTabsButton.textContent = `Move ${labelCount} tab${suffix} into a new window`;
+  closeTabsButton.textContent = `Close ${labelCount} tab${suffix}`;
+  operations.hidden = false;
+  operations.style.display = "";
+}
+
+function getFilteredTabIds() {
+  if (!filteredTabsState.length) return [];
+  const ids = filteredTabsState
+    .map((tab) => tab.id)
+    .filter((id) => typeof id === "number");
+  return [...new Set(ids)];
+}
+
+function moveFilteredTabs() {
+  const tabIds = getFilteredTabIds();
+  if (!tabIds.length) return;
+  chrome.windows.create({ focused: true }, (win) => {
+    if (chrome.runtime.lastError || !win) return;
+    const windowId = win.id;
+    const blankTabId = win.tabs && win.tabs[0] ? win.tabs[0].id : null;
+    chrome.tabs.move(tabIds, { windowId, index: -1 }, () => {
+      if (blankTabId) {
+        chrome.tabs.remove(blankTabId);
+      }
+    });
+  });
+}
+
+function closeFilteredTabs() {
+  const tabIds = getFilteredTabIds();
+  if (!tabIds.length) return;
+  chrome.tabs.remove(tabIds);
 }
 
 function focusTab(tab) {

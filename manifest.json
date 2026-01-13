@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Tab Gallery",
   "description": "A visual tab manager that shows previews of all your tabs in one page.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "permissions": ["tabs", "storage", "unlimitedStorage"],
   "host_permissions": ["<all_urls>"],
   "background": {
